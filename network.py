@@ -1,16 +1,14 @@
 import numpy as np
-import sys
-np.set_printoptions(threshold=np.inf)
 import matplotlib.pyplot as plt
 
 class Network():
     def __init__(self, trainSet, trainLabels, testSet, testLabels, learnRate, epochs):
-        self.layers = np.array([np.zeros(784), np.zeros(128), np.zeros(10)])
-        self.weights = np.array([np.random.normal(0, np.sqrt(1/(794)), (784, 128)),
-                       np.random.normal(0, np.sqrt(1/(794)), (128, 10))])
-        self.adjustment = np.array([np.zeros((784, 128)), np.zeros((128, 10))])
-        self.biases = np.array([np.zeros(128), np.zeros(10)])
-         
+        self.params = {
+            'W1': np.random.normal(0, np.sqrt(1/(794)), (784, 128)),
+            'W2': np.random.normal(0, np.sqrt(1/(794)), (128, 10)),
+            'B1': np.random.normal(0, 1, 128),
+            'B1': np.random.normal(0, 1, 10),
+        } 
         self.trainSet = trainSet
         self.trainLabels = trainLabels
         self.testSet = testSet
@@ -20,38 +18,39 @@ class Network():
 
     def sigmoid(self, x, derivative=0):
         if derivative:
-            return (np.exp(-x))/((np.exp(-x) + 1)**2)
+            return np.exp(-x) / ((np.exp(-x) + 1) ** 2)
         return 1/(1 + np.exp(-x))
 
     def softmax(self, x, derivative=0):
-        exp = np.exp(x)
+        exp = np.exp(x - x.max())
         if derivative:
-            return 1
+            return (exp / np.sum(exp)) * ((1 - exp) / np.sum(exp))
         return exp / np.sum(exp)
 
     def forwardStep(self):
-        self.layers[1] = self.sigmoid(np.dot(self.weights[0].T, self.layers[0]))
-        self.layers[2] = self.sigmoid(np.dot(self.weights[1].T, self.layers[1]))
+        self.params['Z1'] = np.dot(self.params['Z0'].T, self.params['W1'])
+        self.params['A1'] = self.sigmoid(self.params['Z1'])
+        self.params['Z2'] = np.dot(self.params['A1'].T, self.params['W2'])
+        self.params['A2'] = self.sigmoid(self.params['Z2'])
 
     def computeAdjustment(self):
-        commonLambda = (self.layers[2] - self.expected) * self.layers[2] * (1 - self.layers[2])
-
-        self.adjustment[1] = np.transpose(np.outer(commonLambda, self.layers[1]))
-        self.adjustment[0] = np.transpose(np.outer(np.dot(commonLambda, np.transpose(self.weights[1])) * 
-                        self.layers[1] * (1 - self.layers[1]), self.layers[0]))
+        error = (self.params['A2'] - self.expected) * self.sigmoid(self.params['Z2'], derivative=1)
+        self.params['dW2'] = np.outer(error, self.params['A1']).T
+        
+        error = np.dot(error, self.params['W2'].T) * self.sigmoid(self.params['Z1'], derivative=1)
+        self.params['dW1'] = np.outer(error, self.params['Z0']).T
                         
     def backProp(self):
-        for i in range(2):
-            self.weights[i] -= self.learnRate * self.adjustment[i]
-            #print('Adjustment ', i, ': ', self.adjustment[i], 'Weights ', i, ': ', self.weights[i], '\n\n\n')
+        self.params['W2'] -= self.learnRate * self.params['dW2']
+        self.params['W1'] -= self.learnRate * self.params['dW1']
 
     def computeAccuracy(self):
         guesses = []
         index = 0
         for sample in self.testSet:
-            self.layers[0] = sample.flatten() / 255.0 * 0.99 + 0.01
+            self.params['Z0'] = sample.flatten() / 255.0 * 0.99 + 0.01
             self.forwardStep()
-            guess = np.argmax(self.layers[2])
+            guess = np.argmax(self.params['A2'])
             label = self.testLabels[index]
             guesses.append(guess == label)
             index += 1
@@ -69,7 +68,7 @@ class Network():
                 print('Epoch ', epoch + 1, ': ', round(index / len(self.trainSet) * 100, 2), '% done', end='\r')
 
                 self.expected = np.zeros(10) + 0.01
-                self.layers[0] = sample.flatten() / 255.0 * 0.99 + 0.01
+                self.params['Z0'] = sample.flatten() / 255.0 * 0.99 + 0.01
                 self.expected[self.trainLabels[index]] = 0.99
                 self.forwardStep()
                 self.computeAdjustment()
@@ -77,18 +76,21 @@ class Network():
 
                 index += 1
             print('\nEpoch ', epoch + 1, ': ', self.computeAccuracy(), '% accuracy\n')
-
+            
+            # Debug
+            # print(self.params['dW1'], self.params['dW2'])
+        
         print('\nTRAINING FINISHED\n')
         self.predict()
 
     def predict(self):
         index = int(input('Image index: '))
         while index >= 0:
-            self.layers[0] = self.testSet[index].flatten() / 255.0 * 0.99 + 0.01
+            self.params['Z0'] = self.testSet[index].flatten() / 255.0 * 0.99 + 0.01
             self.forwardStep()
 
             plt.imshow(self.testSet[index])
-            plt.title(np.argmax(self.layers[2]))
+            plt.title(np.argmax(self.params['A2']))
             plt.show()
 
             index = int(input('Image index: '))
