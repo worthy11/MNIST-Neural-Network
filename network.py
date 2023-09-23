@@ -2,18 +2,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class Network():
-    def __init__(self, trainSet, trainLabels, testSet, testLabels, learnRate, epochs):
+    def __init__(self, trainSet, trainLabels, testSet, testLabels, learnRate = 0.01, batchSize = 1, epochs = 1):
         self.params = {
-            'W1': np.random.normal(0, np.sqrt(1/(794)), (784, 128)),
-            'W2': np.random.normal(0, np.sqrt(1/(794)), (128, 10)),
+            'W1': np.random.normal(0, np.sqrt(1/(794)), (128, 784)),
+            'W2': np.random.normal(0, np.sqrt(1/(794)), (10, 128)),
             'B1': np.random.normal(0, 1, 128),
-            'B1': np.random.normal(0, 1, 10),
-        } 
-        self.trainSet = trainSet
-        self.trainLabels = trainLabels
+            'B1': np.random.normal(0, 1, 10)
+        }
+        self.trainSet = np.resize(trainSet, (int(np.floor(len(trainSet) / batchSize)), batchSize, 784))
+        self.trainLabels = np.resize(trainLabels, (int(np.floor(len(trainLabels) / batchSize)), batchSize))
         self.testSet = testSet
         self.testLabels = testLabels
+
         self.learnRate = learnRate
+        self.batchSize = batchSize
         self.epochs = epochs
 
     def sigmoid(self, x, derivative=0):
@@ -26,24 +28,31 @@ class Network():
         if derivative:
             return (exp / np.sum(exp)) * ((1 - exp) / np.sum(exp))
         return exp / np.sum(exp)
-
+    
     def forwardStep(self):
-        self.params['Z1'] = np.dot(self.params['Z0'].T, self.params['W1'])
+        self.params['Z1'] = np.dot(self.params['W1'], self.params['Z0'].T).T
         self.params['A1'] = self.sigmoid(self.params['Z1'])
-        self.params['Z2'] = np.dot(self.params['A1'].T, self.params['W2'])
+        self.params['Z2'] = np.dot(self.params['A1'], self.params['W2'].T).T
         self.params['A2'] = self.sigmoid(self.params['Z2'])
 
     def computeAdjustment(self):
-        error = (self.params['A2'] - self.expected) * self.sigmoid(self.params['Z2'], derivative=1)
-        self.params['dW2'] = np.outer(error, self.params['A1']).T
+        self.params['dW2'] = np.zeros((10, 128))
+        self.params['dW1'] = np.zeros((128, 784))
         
-        error = np.dot(error, self.params['W2'].T) * self.sigmoid(self.params['Z1'], derivative=1)
-        self.params['dW1'] = np.outer(error, self.params['Z0']).T
-                        
-    def backProp(self):
-        self.params['W2'] -= self.learnRate * self.params['dW2']
-        self.params['W1'] -= self.learnRate * self.params['dW1']
+        error2 = (self.params['A2'] - self.params['E'].T) * self.sigmoid(self.params['Z2'], derivative=1)
+        error1 = np.dot(error2.T, self.params['W2']) * self.sigmoid(self.params['Z1'], derivative=1)
+        if self.batchSize == 1:
+            self.params['dW2'] = np.outer(error2, self.params['A1'])
+            self.params['dW1'] = np.outer(error1, self.params['Z0'])
+        else:
+            for rowE2, rowE1, col2, col1 in zip(error2.T, error1, self.params['A1'], self.params['Z0']):
+                self.params['dW2'] += np.outer(rowE2, col2)
+            self.params['dW1'] += np.outer(rowE1, col1)
 
+    def backwardStep(self):
+        self.params['W2'] -= self.learnRate * self.params['dW2'] / self.batchSize
+        self.params['W1'] -= self.learnRate * self.params['dW1'] / self.batchSize
+                    
     def computeAccuracy(self):
         guesses = []
         index = 0
@@ -58,28 +67,25 @@ class Network():
 
     def trainNetwork(self):
         for epoch in range(self.epochs):
-            index = 0
-
             shuffle = np.random.permutation(len(self.trainSet))
             self.trainSet = self.trainSet[shuffle]
             self.trainLabels = self.trainLabels[shuffle]
 
-            for sample in self.trainSet:
-                print('Epoch ', epoch + 1, ': ', round(index / len(self.trainSet) * 100, 2), '% done', end='\r')
-
-                self.expected = np.zeros(10) + 0.01
-                self.params['Z0'] = sample.flatten() / 255.0 * 0.99 + 0.01
-                self.expected[self.trainLabels[index]] = 0.99
+            for sample, label, index in zip(self.trainSet, self.trainLabels, range(len(self.trainSet))):
+                print('Epoch ', epoch + 1, ': Batch ', index + 1, ', ', round(index / len(self.trainSet) * 100, 2), '% done', end='\r')
+                self.params['Z0'] = sample / 255.0 * 0.99 + 0.01
+                self.params['E'] = np.zeros((self.batchSize, 10)) + 0.01
+                if self.batchSize == 1:
+                    self.params['Z0'] = np.squeeze(self.params['Z0'])
+                    self.params['E'] = np.squeeze(self.params['E'])
+                    self.params['E'][label[0]] = 0.99
+                else:
+                    for i in range(self.batchSize):
+                        self.params['E'][i][label[i]] = 0.99
                 self.forwardStep()
                 self.computeAdjustment()
-                self.backProp()
-
-                index += 1
+                self.backwardStep()
             print('\nEpoch ', epoch + 1, ': ', self.computeAccuracy(), '% accuracy\n')
-            
-            # Debug
-            # print(self.params['dW1'], self.params['dW2'])
-        
         print('\nTRAINING FINISHED\n')
         self.predict()
 
