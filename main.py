@@ -8,5 +8,5 @@ import tensorflow as tf
 # trainLabels = np.resize(trainLabels, 1000)
 
 # --- CUSTOMIZE THE LEARNING RATE, BATCH SIZE AND NUMBER OF EPOCHS HERE ---
-network = Network(trainSet, trainLabels, testSet, testLabels, learnRate=0.1, batchSize=32, epochs=20)
+network = Network(trainSet, trainLabels, testSet, testLabels, learnRate=0.1, batchSize=16, epochs=5)
 network.trainNetwork()
