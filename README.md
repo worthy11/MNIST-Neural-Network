@@ -2,7 +2,7 @@
 A simple neural network I created to learn the mathematics behind backpropagation. The network trains on the MNIST dataset and learns to recognize handwritten digits: <br />
 
 <p align="center">
-  <img src="https://github.com/worthy11/MNIST-Neural-Network/blob/main/mnist.png" alt="Sample from MNIST dataset"/>
+  <img src="https://github.com/worthy11/MNIST-Neural-Network/blob/master/mnist.png" alt="Sample from MNIST dataset"/>
 </p>
 
 ## How it works
